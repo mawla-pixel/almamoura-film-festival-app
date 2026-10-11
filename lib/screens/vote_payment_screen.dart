@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/festival_options.dart';
 import '../models/film.dart';
@@ -41,6 +43,15 @@ class _VotePaymentScreenState extends State<VotePaymentScreen> {
         bundleId: _selected.id,
       );
       if (!mounted) return;
+
+      if (kIsWeb) {
+        final opened = await launchUrl(
+          Uri.parse(intent.redirectUrl),
+          webOnlyWindowName: '_self',
+        );
+        if (!opened) throw StateError('Could not open Ziina checkout.');
+        return;
+      }
 
       final result = await Navigator.of(context).push<ZiinaCheckoutResult>(
         MaterialPageRoute(

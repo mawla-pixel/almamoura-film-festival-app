@@ -93,15 +93,24 @@ private; never import submitter contact or other personal columns. The app
 renders public poster URLs across film cards, voting, and detail screens, with
 the existing gradient retained as a loading/error fallback.
 
-To enable confirmed payments:
+The payment function requires `ZIINA_TEST_MODE` to be explicitly set to the
+exact string `true` or `false`; each Ziina request sends that boolean as its
+`test` field. There is no implicit mode default. Test mode uses
+`ZIINA_TEST_ACCESS_TOKEN` (or the legacy `ZIINA_ACCESS_TOKEN`); live mode
+requires `ZIINA_LIVE_ACCESS_TOKEN`, so a test credential cannot be used
+accidentally for production payments.
 
-1. In Supabase **Edge Functions → Secrets**, ensure `ZIINA_ACCESS_TOKEN` is
-   set. The Ziina token needs `write_payment_intents` permission.
-2. Generate a long random webhook secret and add it as
-   `ZIINA_WEBHOOK_SECRET` in the same project's Edge Function secrets. Never
-   include either secret in Flutter or commit them to source control.
-3. Register the webhook URL in Ziina using the same webhook secret. The Ziina
-   token must also have `write_webhooks` permission:
+To enable live payments:
+
+1. Complete Ziina merchant onboarding and confirm live payments are enabled.
+   In Supabase **Edge Functions → Secrets**, add a fresh production API token
+   as `ZIINA_LIVE_ACCESS_TOKEN`. It needs `write_payment_intents` permission.
+2. Generate a long random webhook secret and store it as
+   `ZIINA_WEBHOOK_SECRET` in Supabase Edge Function secrets. Never include
+   either secret in Flutter or commit them to source control.
+3. Register the webhook URL in Ziina using the production API token and the
+   same webhook secret. The production token must also have `write_webhooks`
+   permission:
 
    ```sh
    curl -X POST https://api-v2.ziina.com/api/webhook \
@@ -110,7 +119,26 @@ To enable confirmed payments:
      -d '{"url":"https://cbksbxmzeqefbdqzbprn.supabase.co/functions/v1/ziina-film-vote-webhook","secret":"<same-webhook-secret>"}'
    ```
 
-4. The payment function defaults to Ziina test mode. Test with a Ziina test
-   card and verify the payment becomes `completed` and the selected film's
-   public vote count rises by the bundle size. Only after testing, set
-   `ZIINA_TEST_MODE=false` in Edge Function secrets to accept live payments.
+4. For web checkout, set `ZIINA_WEB_CALLBACK_ORIGINS` in Supabase Edge
+   Function secrets to a comma-separated list of approved HTTPS origins. For
+   the current Almamoura web apps, use:
+
+   ```text
+   https://voting.almamourafestival.com,https://vote.almamourafestival.com,https://web.almamourafestival.com,https://app.almamourafestival.com
+   ```
+
+   The payment function rejects browser requests from origins outside this
+   list and returns each web checkout to the same app origin. Add a new origin
+   here before using it for live checkout. Native apps use the registered
+   `io.supabase.almamoura://payment-callback/` callback instead.
+
+5. Once the production token, live webhook, and web callback origins are
+   configured, set `ZIINA_TEST_MODE` to the exact value `false`. Every payment
+   request contains the server-calculated amount in fils,
+   `currency_code: "AED"`, platform-appropriate callbacks, and `test: false`.
+   The Flutter web app returns to a payment-status screen; this screen checks
+   Supabase for the signed webhook result rather than trusting the redirect.
+   Other clients can share the payment function by using the same allowlisted
+   origin and checking the payment status in Supabase after redirect.
+   Only a signed, amount-matched Ziina webhook marks a payment completed and
+   adds votes. Do not test with a real card unless you intend to charge it.

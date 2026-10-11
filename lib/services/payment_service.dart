@@ -11,7 +11,10 @@ class ZiinaCheckoutIntent {
   final String paymentId;
   final String redirectUrl;
 
-  const ZiinaCheckoutIntent({required this.paymentId, required this.redirectUrl});
+  const ZiinaCheckoutIntent({
+    required this.paymentId,
+    required this.redirectUrl,
+  });
 }
 
 /// Talks to the `ziina-create-payment` Supabase edge function, which keeps
@@ -25,7 +28,9 @@ class PaymentService {
     required String bundleId,
   }) async {
     if (!SupabaseService.isConfigured) {
-      throw StateError('Payment is unavailable while the backend is disconnected.');
+      throw StateError(
+        'Payment is unavailable while the backend is disconnected.',
+      );
     }
     final response = await SupabaseService.client.functions.invoke(
       'ziina-create-film-vote-payment',
@@ -58,7 +63,9 @@ class PaymentService {
     String paymentId,
   ) async {
     if (!SupabaseService.isConfigured) {
-      throw StateError('Payment is unavailable while the backend is disconnected.');
+      throw StateError(
+        'Payment is unavailable while the backend is disconnected.',
+      );
     }
     const attempts = 15;
     const delay = Duration(seconds: 2);
