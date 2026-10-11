@@ -482,7 +482,7 @@ values
     1,
     '1 vote',
     'Perfect for one favorite film',
-    5.00,
+    18.50,
     'AED',
     false,
     1
@@ -492,7 +492,7 @@ values
     5,
     '5 votes',
     'Vote across multiple categories',
-    25.00,
+    92.50,
     'AED',
     true,
     2
@@ -502,7 +502,7 @@ values
     10,
     '10 votes',
     'For dedicated festival supporters',
-    50.00,
+    185.00,
     'AED',
     false,
     3
@@ -516,6 +516,35 @@ set
   currency = excluded.currency,
   is_best_value = excluded.is_best_value,
   sort_order = excluded.sort_order,
+  updated_at = now();
+
+create table if not exists public.vote_pricing (
+  currency text primary key check (currency in ('AED', 'USD')),
+  unit_amount_minor integer not null check (unit_amount_minor > 0),
+  is_enabled boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.vote_pricing enable row level security;
+revoke all on table public.vote_pricing, public.vote_bundles
+  from anon, authenticated;
+grant select on public.vote_pricing to anon, authenticated;
+grant select on public.vote_bundles to anon, authenticated;
+
+drop policy if exists "Vote pricing is publicly readable"
+  on public.vote_pricing;
+create policy "Vote pricing is publicly readable"
+  on public.vote_pricing
+  for select
+  to anon, authenticated
+  using (is_enabled);
+
+insert into public.vote_pricing (currency, unit_amount_minor)
+values ('AED', 1850), ('USD', 500)
+on conflict (currency) do update
+set
+  unit_amount_minor = excluded.unit_amount_minor,
+  is_enabled = true,
   updated_at = now();
 
 

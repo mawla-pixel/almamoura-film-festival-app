@@ -106,68 +106,158 @@ Deno.serve(async (req) => {
       );
     }
 
-    let body: { filmId?: unknown; bundleId?: unknown };
+    let body: {
+      filmId?: unknown;
+      bundleId?: unknown;
+      votes?: unknown;
+      currency?: unknown;
+    };
     try {
       body = await req.json();
     } catch {
       return jsonResponse({ error: "Invalid request body." }, 400, corsHeaders);
     }
-    if (typeof body.filmId !== "string" || typeof body.bundleId !== "string") {
+    const isBundlePurchase =
+      typeof body.bundleId === "string" &&
+      body.votes === undefined &&
+      body.currency === undefined;
+    const isCustomPurchase =
+      body.bundleId === undefined &&
+      typeof body.votes === "number" &&
+      Number.isInteger(body.votes) &&
+      body.votes >= 1 &&
+      body.votes <= 100 &&
+      (body.currency === "AED" || body.currency === "USD");
+    if (
+      typeof body.filmId !== "string" ||
+      (!isBundlePurchase && !isCustomPurchase)
+    ) {
       return jsonResponse(
-        { error: "filmId and bundleId are required." },
+        {
+          error:
+            "Provide filmId and either bundleId, or 1–100 votes with currency AED or USD.",
+        },
         400,
         corsHeaders,
       );
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
-    const [
-      { data: film, error: filmError },
-      { data: bundle, error: bundleError },
-    ] = await Promise.all([
-      admin.from("festival_submissions")
-        .select("id, project_title")
-        .eq("id", body.filmId)
-        .maybeSingle(),
-      admin.from("vote_bundles")
-        .select("id, votes, price, currency, label")
-        .eq("id", body.bundleId)
-        .maybeSingle(),
-    ]);
+    const { data: film, error: filmError } = await admin
+      .from("festival_submissions")
+      .select("id, project_title")
+      .eq("id", body.filmId)
+      .maybeSingle();
 
     if (filmError) throw filmError;
     if (!film) {
       return jsonResponse({ error: "Film was not found." }, 404, corsHeaders);
     }
-    if (bundleError) throw bundleError;
-    if (!bundle || bundle.currency !== "AED") {
-      return jsonResponse(
-        { error: "Vote bundle is not available." },
-        404,
-        corsHeaders,
-      );
+
+    let bundleId: string | null = null;
+    let votes: number;
+    let currency: string;
+    let unitAmountMinor: number;
+    let amountMinorUnits: number;
+    let label: string;
+
+    if (typeof body.bundleId === "string") {
+      const { data: bundle, error: bundleError } = await admin
+        .from("vote_bundles")
+        .select("id, votes, price, currency, label")
+        .eq("id", body.bundleId)
+        .maybeSingle();
+      if (bundleError) throw bundleError;
+      if (!bundle) {
+        return jsonResponse(
+          { error: "Vote bundle is not available." },
+          404,
+          corsHeaders,
+        );
+      }
+
+      votes = bundle.votes;
+      currency = bundle.currency;
+      amountMinorUnits = Math.round(Number(bundle.price) * 100);
+      unitAmountMinor = amountMinorUnits / votes;
+      bundleId = bundle.id;
+      label = bundle.label;
+      if (
+        !["AED", "USD"].includes(currency) ||
+        !Number.isSafeInteger(amountMinorUnits) ||
+        !Number.isInteger(unitAmountMinor)
+      ) {
+        return jsonResponse(
+          { error: "Vote bundle pricing is invalid." },
+          409,
+          corsHeaders,
+        );
+      }
+    } else {
+      if (
+        typeof body.votes !== "number" ||
+        typeof body.currency !== "string"
+      ) {
+        return jsonResponse(
+          { error: "Vote quantity and currency are required." },
+          400,
+          corsHeaders,
+        );
+      }
+      votes = body.votes;
+      currency = body.currency;
+      const { data: pricing, error: pricingError } = await admin
+        .from("vote_pricing")
+        .select("unit_amount_minor")
+        .eq("currency", currency)
+        .eq("is_enabled", true)
+        .maybeSingle();
+      if (pricingError) throw pricingError;
+      if (!pricing) {
+        return jsonResponse(
+          { error: "This vote currency is not available." },
+          409,
+          corsHeaders,
+        );
+      }
+
+      unitAmountMinor = pricing.unit_amount_minor;
+      amountMinorUnits = unitAmountMinor * votes;
+      label = `${votes} vote${votes === 1 ? "" : "s"}`;
+      if (
+        !Number.isSafeInteger(unitAmountMinor) ||
+        !Number.isSafeInteger(amountMinorUnits) ||
+        unitAmountMinor <= 0
+      ) {
+        return jsonResponse(
+          { error: "Vote pricing is invalid." },
+          409,
+          corsHeaders,
+        );
+      }
     }
 
-    const amountMinorUnits = Math.round(Number(bundle.price) * 100);
-    if (!Number.isSafeInteger(amountMinorUnits) || amountMinorUnits < 200) {
+    if (votes < 1 || votes > 100 || amountMinorUnits < 1) {
       return jsonResponse(
-        { error: "Vote bundle price is invalid." },
+        { error: "Vote quantity or price is invalid." },
         409,
         corsHeaders,
       );
     }
 
+    const amount = amountMinorUnits / 100;
     const operationId = crypto.randomUUID();
     const { data: payment, error: insertError } = await admin
       .from("film_vote_payments")
       .insert({
         user_id: userData.user.id,
         film_id: film.id,
-        bundle_id: bundle.id,
+        bundle_id: bundleId,
         operation_id: operationId,
-        votes: bundle.votes,
-        amount: bundle.price,
-        currency: bundle.currency,
+        votes,
+        amount,
+        unit_amount_minor: unitAmountMinor,
+        currency,
         status: "pending",
       })
       .select("id")
@@ -201,8 +291,8 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           amount: amountMinorUnits,
-          currency_code: bundle.currency,
-          message: `${bundle.label} for ${film.project_title} - Almamoura Film Festival`,
+          currency_code: currency,
+          message: `${label} for ${film.project_title} - Almamoura Film Festival`,
           success_url: callbackUrl("success"),
           cancel_url: callbackUrl("cancel"),
           failure_url: callbackUrl("failure"),
@@ -270,6 +360,9 @@ Deno.serve(async (req) => {
       {
         paymentId: payment.id,
         redirectUrl: redirectUrl.toString(),
+        votes,
+        amount,
+        currency,
       },
       200,
       corsHeaders,

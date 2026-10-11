@@ -53,12 +53,14 @@ The catalogue currently contains all 2,634 FilmFreeway submissions, including
 Incomplete and Withdrawn records, as requested. The public table exposes
 selected film metadata and vote totals, not submitter contact data. Library and
 voting screens fetch 30 films per request, with filtering and ordering handled
-by Supabase. Each purchase is for one film and one of the fixed AED 5, AED 25,
-or AED 50 vote bundles. Only a Ziina-confirmed completed payment contributes
-votes.
+by Supabase. Each order is for one film and 1–100 votes. Voters may choose
+AED 18.50 or USD 5.00 per vote. These are separate published prices, not a
+browser-side FX conversion. Ziina supports both presentment currencies and
+settles into the merchant wallet in AED. Only a Ziina-confirmed completed
+payment contributes votes.
 
 The project migrations for `festival_submissions`, `vote_bundles`,
-`film_vote_payments`, and `public_voting_films` are in
+`vote_pricing`, `film_vote_payments`, and `public_voting_films` are in
 `supabase/migrations/`. They have already been applied to the configured
 Supabase project.
 
@@ -100,6 +102,22 @@ exact string `true` or `false`; each Ziina request sends that boolean as its
 requires `ZIINA_LIVE_ACCESS_TOKEN`, so a test credential cannot be used
 accidentally for production payments.
 
+The `vote_pricing` table is the source of truth for custom vote purchases:
+`AED` is 1,850 minor units per vote (AED 18.50) and `USD` is 500 minor units
+per vote (USD 5.00). The backend accepts only a supported selected currency
+and an integer vote count from 1 through 100, calculates the total itself,
+and stores the currency, unit price, quantity, and total in
+`film_vote_payments`. It never accepts an amount from the browser. Existing
+Flutter bundle IDs remain supported and use the same AED per-vote price.
+
+Web clients should call `ziina-create-film-vote-payment` with an authenticated
+Supabase session and a body such as
+`{"filmId":"<film-uuid>","votes":1,"currency":"USD"}` or
+`{"filmId":"<film-uuid>","votes":1,"currency":"AED"}`. The function creates
+the Ziina intent server-side. Do not call Ziina's intent endpoint directly
+from a browser, expose the access token, or mark a payment successful based on
+the return URL. A signed webhook is the only confirmation that grants votes.
+
 To enable live payments:
 
 1. Complete Ziina merchant onboarding and confirm live payments are enabled.
@@ -134,8 +152,9 @@ To enable live payments:
 
 5. Once the production token, live webhook, and web callback origins are
    configured, set `ZIINA_TEST_MODE` to the exact value `false`. Every payment
-   request contains the server-calculated amount in fils,
-   `currency_code: "AED"`, platform-appropriate callbacks, and `test: false`.
+   request contains the server-calculated amount in minor currency units, the
+   selected `currency_code` (`AED` or `USD`), platform-appropriate callbacks,
+   and `test: false`.
    The Flutter web app returns to a payment-status screen; this screen checks
    Supabase for the signed webhook result rather than trusting the redirect.
    Other clients can share the payment function by using the same allowlisted

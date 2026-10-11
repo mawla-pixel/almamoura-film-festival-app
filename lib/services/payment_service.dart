@@ -17,9 +17,9 @@ class ZiinaCheckoutIntent {
   });
 }
 
-/// Talks to the `ziina-create-payment` Supabase edge function, which keeps
-/// the Ziina secret access token server-side and creates a hosted payment
-/// intent for the selected vote bundle.
+/// Talks to the `ziina-create-film-vote-payment` Supabase Edge Function, which
+/// keeps the Ziina secret token server-side and creates a hosted intent for
+/// the selected film-vote bundle.
 class PaymentService {
   PaymentService._();
 

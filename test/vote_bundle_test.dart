@@ -6,7 +6,7 @@ void main() {
   test('vote bundles display their AED prices', () {
     expect(
       FestivalOptions.voteBundles.map((bundle) => bundle.priceLabel).toList(),
-      ['AED 5.00', 'AED 25.00', 'AED 50.00'],
+      ['AED 18.50', 'AED 92.50', 'AED 185.00'],
     );
   });
 }

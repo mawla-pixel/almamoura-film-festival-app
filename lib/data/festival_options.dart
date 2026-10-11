@@ -9,14 +9,14 @@ class FestivalOptions {
       votes: 1,
       label: '1 vote',
       description: 'Perfect for one favorite film',
-      price: 5,
+      price: 18.5,
     ),
     VoteBundle(
       id: 'five',
       votes: 5,
       label: '5 votes',
       description: 'Vote across multiple categories',
-      price: 25,
+      price: 92.5,
       isBestValue: true,
     ),
     VoteBundle(
@@ -24,7 +24,7 @@ class FestivalOptions {
       votes: 10,
       label: '10 votes',
       description: 'For dedicated festival supporters',
-      price: 50,
+      price: 185,
     ),
   ];
 
