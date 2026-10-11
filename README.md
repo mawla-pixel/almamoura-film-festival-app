@@ -21,17 +21,17 @@ Use `--dart-define` with the same two names when building a release.
 
 ## Web release
 
-The production web app is deployed to
-`https://mawla-pixel.github.io/almamoura-film-festival-app/` from the `main`
-branch by `.github/workflows/deploy-web.yml`. The workflow builds Flutter Web
-with the repository path as its base URL, so navigation and assets work from
-the Pages subdirectory. Enable GitHub Pages with **GitHub Actions** as the
-build and deployment source.
+The private repository includes a `Dockerfile` and `nginx.conf` for deploying
+the Flutter web app with Coolify. In Coolify, create an application from this
+GitHub repository, select Dockerfile deployment, and use `/` as the health
+check path. Coolify should provide HTTPS and route traffic to the container's
+port 80. The container builds the Flutter web release and serves it with
+single-page-app route fallback.
 
 For sign-in, password resets, and OAuth on the deployed web app, add the
-deployed URL (including its repository path) to Supabase Authentication's
-allowed redirect URLs. The app automatically returns web authentication flows
-to the current web URL while retaining the native callback on iOS and Android.
+Coolify app URL to Supabase Authentication's allowed redirect URLs. The app
+automatically returns web authentication flows to the current web URL while
+retaining the native callback on iOS and Android.
 
 ## Festival submissions
 
